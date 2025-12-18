@@ -22,7 +22,7 @@ This fork adds a **Bokeh Simulator** that allows for physically-based depth-of-f
 
 Key features include:
 *   **Synthetic Aperture**: Simulates a real camera with a configurable aperture size.
-*   **Golden Ratio Spiral Sampling**: Uses advanced sampling patterns to ensure artifact-free, creamy bokeh even with fewer samples.
+*   **Golden Ratio Spiral Sampling**: Uses Fibonacci sampling patterns to ensure artifact-free, creamy bokeh even with fewer samples.
 *   **Focus Racking**: Generate cinematic videos where the focus transitions smoothly ("racks") from foreground to background.
 *   **Linear Light Accumulation**: Correctly accumulates light in linear RGB space for realistic blending.
 
