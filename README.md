@@ -1,7 +1,7 @@
 # Sharp Monocular View Synthesis (Bokeh Extension)
 
-[![Project Page](https://img.shields.io/badge/Project-Page-green)](https://apple.github.io/ml-sharp/)
-[![arXiv](https://img.shields.io/badge/arXiv-2512.10685-b31b1b.svg)](https://arxiv.org/abs/2512.10685)
+<!-- [![Project Page](https://img.shields.io/badge/Project-Page-green)](https://apple.github.io/ml-sharp/)
+[![arXiv](https://img.shields.io/badge/arXiv-2512.10685-b31b1b.svg)](https://arxiv.org/abs/2512.10685) -->
 
 > **Note:** This repository is an unofficial fork of the original [SHARP](https://github.com/apple/ml-sharp) codebase. It is maintained by **[Nando Metzger](https://nandometzger.github.io)** and extends the original work with **Bokeh Simulation** features.
 
