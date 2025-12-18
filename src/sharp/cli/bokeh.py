@@ -1,7 +1,8 @@
 """Contains `sharp bokeh` CLI implementation.
 
+Copyright (C) 2025 Nando Metzger.
+This file is part of the Sharp Bokeh Extension, a fork of the original SHARP repository.
 For licensing see accompanying LICENSE file.
-Copyright (C) 2025 Apple Inc. All Rights Reserved.
 """
 
 from __future__ import annotations

@@ -1,3 +1,8 @@
+"""Script to create presentation videos comparing input images and bokeh outputs.
+
+Copyright (C) 2025 Nando Metzger.
+This file is part of the Sharp Bokeh Extension.
+"""
 
 import os
 import glob
@@ -5,7 +10,7 @@ from pathlib import Path
 import imageio.v3 as iio
 import imageio
 import numpy as np
-import cv2
+from PIL import Image
 from tqdm import tqdm
 
 def create_presentation_videos(input_dir, bokeh_dir, output_dir):
@@ -40,14 +45,18 @@ def create_presentation_videos(input_dir, bokeh_dir, output_dir):
             
             # Prepare initialization from first frame without loading all
             # Use iterator to stream frames
+            # Default plugin usually works (ffmpeg)
             reader = iio.imiter(video_file)
             
             # Get first frame to determine dimensions
             first_frame = next(reader)
             vid_h, vid_w, _ = first_frame.shape
 
-            # Resize static image to match video height
-            img_h, img_w, _ = raw_image.shape
+            # Resize static image to match video height using PIL
+            # Convert numpy -> PIL
+            pil_image = Image.fromarray(raw_image)
+            img_w, img_h = pil_image.size
+            
             scale = vid_h / img_h
             new_w = int(img_w * scale)
             
@@ -55,15 +64,16 @@ def create_presentation_videos(input_dir, bokeh_dir, output_dir):
             if new_w % 2 != 0:
                 new_w += 1
                 
-            resized_image = cv2.resize(raw_image, (new_w, vid_h), interpolation=cv2.INTER_AREA)
+            pil_resized = pil_image.resize((new_w, vid_h), Image.Resampling.LANCZOS)
+            resized_image = np.array(pil_resized)
 
             # Setup writer
             out_file = output_path / f"presentation_{stem}.mp4"
             
             # Using v2 style writer which is often more robust for simple appending
             with imageio.get_writer(out_file, fps=16, codec='libx264') as writer:
-                 # Stream read
-                 video_reader = iio.imiter(video_file, plugin="pyav")
+                 # Stream read - reopen generator
+                 video_reader = iio.imiter(video_file)
                  for frame in video_reader:
                       combined = np.hstack((resized_image, frame))
                       # Ensure compatible types (sometimes uint8 is safer)
