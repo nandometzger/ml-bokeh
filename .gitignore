@@ -164,3 +164,9 @@ cython_debug/
 .DS_STORE
 *.pt
 .aider*
+
+
+gaussians
+bokeh_output
+presentation_videos
+sample_data

@@ -1,15 +1,38 @@
-# Sharp Monocular View Synthesis in Less Than a Second
+# Sharp Monocular View Synthesis (Bokeh Extension)
 
 [![Project Page](https://img.shields.io/badge/Project-Page-green)](https://apple.github.io/ml-sharp/)
 [![arXiv](https://img.shields.io/badge/arXiv-2512.10685-b31b1b.svg)](https://arxiv.org/abs/2512.10685)
 
-This software project accompanies the research paper: _Sharp Monocular View Synthesis in Less Than a Second_
-by _Lars Mescheder, Wei Dong, Shiwei Li, Xuyang Bai, Marcel Santos, Peiyun Hu, Bruno Lecouat, Mingmin Zhen, Amaël Delaunoy,
-Tian Fang, Yanghai Tsin, Stephan Richter and Vladlen Koltun_.
+> **Note:** This repository is an unofficial fork of the original [SHARP](https://github.com/apple/ml-sharp) codebase. It is maintained by **[Nando Metzger](https://nandometzger.github.io)** and extends the original work with **Bokeh Simulation** features.
 
-![](data/teaser.jpg)
+<!-- This software project accompanies the research paper: _Sharp Monocular View Synthesis in Less Than a Second_ -->
+<!-- by _Lars Mescheder, et al._. -->
 
-We present SHARP, an approach to photorealistic view synthesis from a single image. Given a single photograph, SHARP regresses the parameters of a 3D Gaussian representation of the depicted scene. This is done in less than a second on a standard GPU via a single feedforward pass through a neural network. The 3D Gaussian representation produced by SHARP can then be rendered in real time, yielding high-resolution photorealistic images for nearby views. The representation is metric, with absolute scale, supporting metric camera movements. Experimental results demonstrate that SHARP delivers robust zero-shot generalization across datasets. It sets a new state of the art on multiple datasets, reducing LPIPS by 25–34% and DISTS by 21–43% versus the best prior model, while lowering the synthesis time by three orders of magnitude.
+<!-- ![](data/teaser.jpg) -->
+![](data/bokeh_teaser.gif)
+
+_Figure: Real-time focus racking simulation (Left: Input Image, Right: Generated Bokeh Video)_
+
+
+<!-- We present SHARP, an approach to photorealistic view synthesis from a single image. Given a single photograph, SHARP regresses the parameters of a 3D Gaussian representation of the depicted scene. -->
+
+## Bokeh Simulation Extension
+
+This fork adds a **Bokeh Simulator** that allows for physically-based depth-of-field rendering from the inferred 3D Gaussians.
+
+Key features include:
+*   **Synthetic Aperture**: Simulates a real camera with a configurable aperture size.
+*   **Golden Ratio Spiral Sampling**: Uses advanced sampling patterns to ensure artifact-free, creamy bokeh even with fewer samples.
+*   **Focus Racking**: Generate cinematic videos where the focus transitions smoothly ("racks") from foreground to background.
+*   **Linear Light Accumulation**: Correctly accumulates light in linear RGB space for realistic blending.
+
+
+## Upcoming Features
+
+We plan to continuously improve the Bokeh simulator. Upcoming features include:
+
+*   **Custom Aperture Shapes**: Support for non-circular apertures (e.g., polygonal, heart-shaped) for creative bokeh/flare effects.
+*   **Smart Auto-Focus**: Integration of subject and eye detection to automatically determine the most aesthetically pleasing focus depth.
 
 ## Getting started
 
@@ -41,39 +64,44 @@ sharp predict -i /path/to/input/images -o /path/to/output/gaussians
 
 The model checkpoint will be downloaded automatically on first run and cached locally at `~/.cache/torch/hub/checkpoints/`.
 
-Alternatively, you can download the model directly:
+### Rendering Bokeh (New Feature)
 
-```
-wget https://ml-site.cdn-apple.com/models/sharp/sharp_2572gikvuh.pt
-```
+You can render realistic depth-of-field images or videos using the new `bokeh` command.
 
-To use a manually downloaded checkpoint, specify it with the `-c` flag:
+**Single Image (Center Focus):**
+Render a single image where the focus is set to the center of the scene.
 
-```
-sharp predict -i /path/to/input/images -o /path/to/output/gaussians -c sharp_2572gikvuh.pt
-```
-
-The results will be 3D gaussian splats (3DGS) in the output folder. The 3DGS `.ply` files are compatible to various public 3DGS renderers. We follow the OpenCV coordinate convention (x right, y down, z forward). The 3DGS scene center is roughly at (0, 0, +z). When dealing with 3rdparty renderers, please scale and rotate to re-center the scene accordingly.
-
-### Rendering trajectories (CUDA GPU only)
-
-Additionally you can render videos with a camera trajectory. While the gaussians prediction works for all CPU, CUDA, and MPS, rendering videos via the `--render` option currently requires a CUDA GPU. The gsplat renderer takes a while to initialize at the first launch.
-
-```
-sharp predict -i /path/to/input/images -o /path/to/output/gaussians --render
-
-# Or from the intermediate gaussians:
-sharp render -i /path/to/output/gaussians -o /path/to/output/renderings
+```bash
+sharp bokeh -i /path/to/input/gaussians -o /path/to/output/bokeh --aperture-size 0.02 --num-samples 128
 ```
 
-## Evaluation
+**Focus Racking Video:**
+Generate a video that sweeps focus from the nearest object to infinity.
 
-Please refer to the paper for both quantitative and qualitative evaluations.
-Additionally, please check out this [qualitative examples page](https://apple.github.io/ml-sharp/) containing several video comparisons against related work.
+```bash
+sharp bokeh -i /path/to/input/gaussians -o /path/to/output/bokeh --video --num-frames 48 --aperture-size 0.02 --num-samples 128
+```
+
+**Parameters:**
+*   `--aperture-size`: Diameter of the virtual aperture (default: 0.01). Larger = more blur.
+*   `--num-samples`: Number of views to accumulate per frame (default: 128). Higher = smoother bokeh but slower.
+*   `--video`: Enable video generation mode.
+
 
 ## Citation
 
-If you find our work useful, please cite the following paper:
+If you find the **Bokeh Extension** useful, please cite this repository:
+
+```bibtex
+@misc{SharpBokeh2025,
+  title  = {Sharp Monocular View Synthesis (Bokeh Extension)},
+  author = {Metzger, Nando},
+  year   = {2025},
+  url    = {https://github.com/metzgern/ml-sharp},
+}
+```
+
+If you use the core **SHARP** method, please cite the original paper:
 
 ```bibtex
 @inproceedings{Sharp2025:arxiv,
@@ -87,9 +115,12 @@ If you find our work useful, please cite the following paper:
 
 ## Acknowledgements
 
-Our codebase is built using multiple opensource contributions, please see [ACKNOWLEDGEMENTS](ACKNOWLEDGEMENTS) for more details.
+This project is a fork of the original [SHARP](https://github.com/apple/ml-sharp) repository developed by **Apple**. We thank the original authors for releasing their code and models.
+
+The original codebase is built using multiple opensource contributions, please see [ACKNOWLEDGEMENTS](ACKNOWLEDGEMENTS) for more details.
 
 ## License
 
 Please check out the repository [LICENSE](LICENSE) before using the provided code and
 [LICENSE_MODEL](LICENSE_MODEL) for the released models.
+
