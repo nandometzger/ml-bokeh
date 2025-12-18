@@ -1,4 +1,8 @@
-"""Module for rendering bokeh effects on 3D Gaussians."""
+"""Module for rendering bokeh effects on 3D Gaussians.
+
+Copyright (C) 2025 Nando Metzger.
+This file is part of the Sharp Bokeh Extension, a fork of the original SHARP repository.
+"""
 
 import logging
 from pathlib import Path
