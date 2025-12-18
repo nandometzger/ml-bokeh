@@ -200,6 +200,30 @@ def create_eye_trajectory_rotate_forward(
     return eye_positions
 
 
+def create_aperture_samples(
+    aperture_size: float,
+    num_samples: int,
+) -> list[torch.Tensor]:
+    """Create random aperture samples on a disk."""
+    eye_positions = []
+    
+    # Use Golden Ratio Spiral for uniform coverage
+    # Golden angle = pi * (3 - sqrt(5))
+    golden_angle = np.pi * (3 - np.sqrt(5))
+    
+    for i in range(num_samples):
+        # r = R * sqrt(i / N)
+        r = aperture_size * np.sqrt(i / num_samples)
+        theta = i * golden_angle
+        
+        x = r * np.cos(theta)
+        y = r * np.sin(theta)
+        z = 0.0
+        eye_positions.append(torch.tensor([x, y, z], dtype=torch.float32))
+
+    return eye_positions
+
+
 def create_camera_model(
     scene: Gaussians3D,
     intrinsics: torch.Tensor,
@@ -322,15 +346,15 @@ class PinholeCameraModel:
         """Compute camera for eye position."""
         extrinsics = self.screen_extrinsics.clone()
 
-        origin = eye_pos if self.lookat_mode == "ahead" else torch.zeros(3)
+        origin = eye_pos if self.lookat_mode == "ahead" else torch.zeros(3, device=eye_pos.device, dtype=eye_pos.dtype)
 
         if self.lookat_point is None:
             depth_focus = max(self.min_depth_focus, self.depth_quantiles.focus)
-            look_at_position = origin + torch.tensor([0.0, 0.0, depth_focus])
+            look_at_position = origin + torch.tensor([0.0, 0.0, depth_focus], device=eye_pos.device, dtype=eye_pos.dtype)
         else:
-            look_at_position = origin + torch.tensor([*self.lookat_point])
+            look_at_position = origin + torch.tensor([*self.lookat_point], device=eye_pos.device, dtype=eye_pos.dtype)
 
-        world_up = torch.tensor([0.0, -1.0, 0.0])
+        world_up = torch.tensor([0.0, -1.0, 0.0], device=eye_pos.device, dtype=eye_pos.dtype)
         extrinsics_modifier = create_camera_matrix(
             eye_pos, look_at_position, world_up, inverse=True
         )
@@ -373,7 +397,7 @@ def _compute_depth_quantiles(
     q_far: float = 0.999,
 ) -> FocusRange:
     """Compute disparity quantiles for scene and extrinsics id."""
-    points_local = points @ extrinsics[:3, :3].T + extrinsics[:3, 3]
+    points_local = points.to(extrinsics.device) @ extrinsics[:3, :3].T + extrinsics[:3, 3]
     depth_values = points_local[..., 2].flatten()
     depth_values = depth_values[depth_values > 0]
     q_values = torch.tensor([q_near, q_focus, q_far])
