@@ -122,7 +122,7 @@ class GSplatRenderer(nn.Module):
             elif self.color_space == "linearRGB":
                 pass
             else:
-                ValueError("Unsupported ColorSpace type.")
+                raise ValueError("Unsupported ColorSpace type.")
 
             # splats: (B, N, 10)
             cov2d = self._conics_to_covars2d(meta["conics"])
