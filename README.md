@@ -31,7 +31,6 @@ Key features include:
 
 We plan to continuously improve the Bokeh simulator. Upcoming features include:
 
-
 *   [x] **Smart Auto-Focus**: Integration of subject and eye detection to automatically determine the most aesthetically pleasing focus depth.
 *   [ ] **Custom Aperture Shapes**: Support for non-circular apertures (e.g., polygonal, heart-shaped) for creative bokeh/flare effects.
 *   [ ] **Refocusing**: Let the user input an already focused video and refocus it to a different depth.
@@ -97,7 +96,6 @@ sharp bokeh -i /path/to/input/gaussians -o /path/to/output/bokeh --autofocus --d
 *   `--video`: Enable video generation mode.
 *   `--autofocus`: Enable smart autofocus using GroundingDINO.
 *   `--debug`: Output a debug image alongside the render showing detection boxes and the selected focus point.
-
 
 ## Citation
 
