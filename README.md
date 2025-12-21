@@ -33,6 +33,7 @@ We plan to continuously improve the Bokeh simulator. Upcoming features include:
 
 *   **Custom Aperture Shapes**: Support for non-circular apertures (e.g., polygonal, heart-shaped) for creative bokeh/flare effects.
 *   **Smart Auto-Focus**: Integration of subject and eye detection to automatically determine the most aesthetically pleasing focus depth.
+*   **Refocus**: Feature that allows for inputing already focused images. this requires the integration of a model that first converts the input to an "all-in-focus" image.
 
 ## Getting started
 
