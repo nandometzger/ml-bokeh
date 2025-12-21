@@ -104,7 +104,7 @@ If you find the **Bokeh Extension** useful, please cite this repository:
 
 ```bibtex
 @misc{SharpBokeh2025,
-  title  = {Sharp Monocular View Synthesis (Bokeh Extension)},
+  title  = {ML-Bokeh: Monocular View Synthesis with Cinematic Depth-of-Field},
   author = {Metzger, Nando},
   year   = {2025},
   url    = {https://github.com/metzgern/ml-sharp},
