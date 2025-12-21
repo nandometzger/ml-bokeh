@@ -72,14 +72,16 @@ def create_presentation_videos(input_dir, bokeh_dir, output_dir):
             
             # Using v2 style writer which is often more robust for simple appending
             with imageio.get_writer(out_file, fps=16, codec='libx264') as writer:
-                 # Stream read - reopen generator
-                 video_reader = iio.imiter(video_file)
-                 for frame in video_reader:
-                      combined = np.hstack((resized_image, frame))
-                      # Ensure compatible types (sometimes uint8 is safer)
-                      if combined.dtype != np.uint8:
-                            combined = combined.astype(np.uint8)
-                      writer.append_data(combined)
+                 # Loop 3 times for longer presentation
+                 for _ in range(3):
+                     # Stream read - reopen generator for each loop
+                     video_reader = iio.imiter(video_file)
+                     for frame in video_reader:
+                          combined = np.hstack((resized_image, frame))
+                          # Ensure compatible types (sometimes uint8 is safer)
+                          if combined.dtype != np.uint8:
+                                combined = combined.astype(np.uint8)
+                          writer.append_data(combined)
                       
         except Exception as e:
             print(f"Error processing {stem}: {e}")

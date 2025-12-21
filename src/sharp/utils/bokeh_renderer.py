@@ -25,7 +25,10 @@ def render_single_bokeh(
     metadata: SceneMetaData,
     output_path: Path,
     aperture_size: float,
+
     num_samples: int,
+    autofocus: bool = False,
+    debug: bool = False,
 ) -> None:
     """Render a single bokeh image focused at the center.
     
@@ -67,9 +70,21 @@ def render_single_bokeh(
             image_height=height,
         )
         depth_map = canonical_output.depth[0, 0] # (H, W)
-        center_y, center_x = height // 2, width // 2
-        focus_depth = depth_map[center_y, center_x].item()
-        LOGGER.info(f"Focus depth determined at center: {focus_depth:.4f}")
+        
+        focus_depth = 0.0
+        
+        if autofocus:
+            focus_depth = _run_autofocus(
+                canonical_output, 
+                width, 
+                height, 
+                output_path, 
+                debug
+            )
+        else:
+            center_y, center_x = height // 2, width // 2
+            focus_depth = depth_map[center_y, center_x].item()
+            LOGGER.info(f"Focus depth determined at center: {focus_depth:.4f}")
 
     final_image_uint8 = _accumulate_frame(
         gaussians, renderer, intrinsics, metadata, aperture_size, num_samples, focus_depth
@@ -166,15 +181,21 @@ def _accumulate_frame(
     device = gaussians.mean_vectors.device
     (width, height) = metadata.resolution_px
     
-    lookat_point = (0.0, 0.0, focus_depth)
-    camera_model = camera.PinholeCameraModel(
-        gaussians,
-        screen_extrinsics=torch.eye(4, device=device),
-        screen_intrinsics=intrinsics,
-        screen_resolution_px=metadata.resolution_px,
-        lookat_point=lookat_point,
-        lookat_mode="point",
-    )
+    # Shift-Lens Rendering (Parallel Image Planes)
+    # To avoid perspective distortion ("swirly bokeh"):
+    # 1. Translate camera by 'offset' (samples aperture).
+    # 2. Shift intrinsics principal point (cx, cy) to re-center the focus plane.
+    #    cx_new = cx + f * offset_x / focus_depth
+    
+    # Base intrinsics / extrinsics
+    base_extrinsics = torch.eye(4, device=device)
+    base_intrinsics = intrinsics.clone() # (1, 4, 4) if batched or (4, 4)
+    if base_intrinsics.ndim == 3: base_intrinsics = base_intrinsics[0]
+    
+    fx = base_intrinsics[0, 0]
+    fy = base_intrinsics[1, 1]
+    cx = base_intrinsics[0, 2]
+    cy = base_intrinsics[1, 2]
 
     # Use Golden Ratio Spiral logic from camera module
     eye_positions = camera.create_aperture_samples(aperture_size, num_samples)
@@ -182,26 +203,95 @@ def _accumulate_frame(
     accumulation_buffer = torch.zeros((3, height, width), device=device, dtype=torch.float32)
 
     for eye_pos in eye_positions:
-        camera_info = camera_model.compute(eye_pos.to(device))
+        # eye_pos is (x, y, 0) in camera frame
+        offset = eye_pos.to(device)
+        
+        # 1. Modify Extrinsics: Translate by offset
+        # World-to-Camera (Extrinsics) T_new = T_translate @ T_base
+        # Since T_base is identity here (canonical view is usually at identity), T_new is just translation.
+        # But wait, input gaussians are already transformed to canonical view??
+        # The render_single_bokeh function sets extrinsics_canonical = Identity.
+        # So we just set the translation column.
+        # Note: Extrinsics matrix usually maps World -> Camera.
+        # If Camera moves by 'offset' in World frame, the point P_w becomes P_c = R(P_w - C_new).
+        # C_new = C_old + offset.
+        # P_c = P_w - offset (assuming R=I).
+        # So we subtract offset from the translation part.
+        
+        current_extrinsics = base_extrinsics.clone()
+        current_extrinsics[:3, 3] -= offset
+        
+        # 2. Modify Intrinsics: Shift principal point
+        current_intrinsics = base_intrinsics.clone()
+        
+        # Shift amount = f * offset / focus_depth
+        # Note: offset is (x, y, 0).
+        # Careful with signs. 
+        # P_c_new = P_original_cam - offset.
+        # x_new = x_old - offset_x
+        # u_new = f * (x_old - offset_x) / z + cx_new
+        # We want u_new = u_old = f * x_old / z + cx
+        # f * x_old / z - f * offset_x / z + cx_new = f * x_old / z + cx
+        # cx_new = cx + f * offset_x / z
+        
+        shift_x = fx * offset[0] / focus_depth
+        shift_y = fy * offset[1] / focus_depth
+        
+        current_intrinsics[0, 2] += shift_x
+        current_intrinsics[1, 2] += shift_y
         
         with torch.no_grad():
             rendering_output = renderer(
                 gaussians,
-                extrinsics=camera_info.extrinsics[None].to(device),
-                intrinsics=camera_info.intrinsics[None].to(device),
-                image_width=camera_info.width,
-                image_height=camera_info.height,
+                extrinsics=current_extrinsics.unsqueeze(0),
+                intrinsics=current_intrinsics.unsqueeze(0),
+                image_width=width,
+                image_height=height,
             )
             # Accumulate in Linear RGB space
             accumulation_buffer += rendering_output.color[0]
 
     averaged_image = accumulation_buffer / num_samples
 
-    # Convert to sRGB at the very end if required
-    if metadata.color_space == "sRGB":
-        from sharp.utils import color_space as cs_utils
-        final_image = cs_utils.linearRGB2sRGB(averaged_image)
-    else:
-        final_image = averaged_image
+    # Convert to sRGB at the very end if required or if output is standard 8-bit
+    # We always convert to sRGB for displayable formats to avoid dark images
+    from sharp.utils import color_space as cs_utils
+    final_image = cs_utils.linearRGB2sRGB(averaged_image)
 
     return (final_image.permute(1, 2, 0).clamp(0, 1) * 255.0).to(dtype=torch.uint8).cpu().numpy()
+
+
+def _run_autofocus(
+    canonical_output: gsplat.RenderingOutputs,
+    width: int,
+    height: int,
+    output_path: Path,
+    debug: bool
+) -> float:
+    """Run the autofocus engine on a rendered view."""
+    from sharp.utils import color_space as cs_utils
+    from sharp.utils.autofocus import get_default_autofocus_engine
+    
+    LOGGER.info("Autofocus enabled. Determining focus point...")
+    engine = get_default_autofocus_engine()
+    
+    # Extract depth and color
+    depth_map = canonical_output.depth[0, 0] # (H, W)
+    color_tensor = canonical_output.color[0] # (3, H, W)
+    
+    # Convert Linear RGB -> sRGB for detection
+    color_srgb = cs_utils.linearRGB2sRGB(color_tensor.permute(1, 2, 0))
+    image_np = (color_srgb.clamp(0, 1) * 255).byte().cpu().numpy()
+    depth_np = depth_map.detach().cpu().numpy()
+    
+    focus_depth, debug_img = engine.compute_focus_depth(
+        image_np, depth_np, debug=debug
+    )
+    
+    if debug and debug_img is not None:
+        debug_path = output_path.with_name(output_path.stem + "_debug.jpg")
+        import cv2
+        cv2.imwrite(str(debug_path), cv2.cvtColor(debug_img, cv2.COLOR_RGB2BGR))
+        LOGGER.info(f"Saved debug autofocus output to {debug_path}")
+        
+    return focus_depth
