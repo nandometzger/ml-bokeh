@@ -31,8 +31,10 @@ Key features include:
 
 We plan to continuously improve the Bokeh simulator. Upcoming features include:
 
-*   **Custom Aperture Shapes**: Support for non-circular apertures (e.g., polygonal, heart-shaped) for creative bokeh/flare effects.
-*   **Smart Auto-Focus**: Integration of subject and eye detection to automatically determine the most aesthetically pleasing focus depth.
+
+*   [x] **Smart Auto-Focus**: Integration of subject and eye detection to automatically determine the most aesthetically pleasing focus depth.
+*   [ ] **Custom Aperture Shapes**: Support for non-circular apertures (e.g., polygonal, heart-shaped) for creative bokeh/flare effects.
+*   [ ] **Refocusing**: Let the user input an already focused video and refocus it to a different depth.
 
 ## Getting started
 
@@ -82,10 +84,19 @@ Generate a video that sweeps focus from the nearest object to infinity.
 sharp bokeh -i /path/to/input/gaussians -o /path/to/output/bokeh --video --num-frames 48 --aperture-size 0.02 --num-samples 128
 ```
 
+**Autofocus Mode (New Feature):**
+Automatically detect subjects (Eyes > Persons > Objects) and focus on the one closest to the camera.
+
+```bash
+sharp bokeh -i /path/to/input/gaussians -o /path/to/output/bokeh --autofocus --debug
+```
+
 **Parameters:**
 *   `--aperture-size`: Diameter of the virtual aperture (default: 0.01). Larger = more blur.
 *   `--num-samples`: Number of views to accumulate per frame (default: 128). Higher = smoother bokeh but slower.
 *   `--video`: Enable video generation mode.
+*   `--autofocus`: Enable smart autofocus using GroundingDINO.
+*   `--debug`: Output a debug image alongside the render showing detection boxes and the selected focus point.
 
 
 ## Citation
