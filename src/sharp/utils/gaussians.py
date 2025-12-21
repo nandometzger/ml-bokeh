@@ -333,6 +333,7 @@ def load_ply(path: Path) -> tuple[Gaussians3D, SceneMetaData]:
     opacities = torch.sigmoid(torch.from_numpy(opacity_logits).view(1, -1)).float()
 
 
+
     gaussians = Gaussians3D(
         mean_vectors=mean_vectors,
         quaternions=quaternions,

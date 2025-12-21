@@ -98,7 +98,6 @@ sharp bokeh -i /path/to/input/gaussians -o /path/to/output/bokeh --autofocus --d
 *   `--autofocus`: Enable smart autofocus using GroundingDINO.
 *   `--debug`: Output a debug image alongside the render showing detection boxes and the selected focus point.
 
-
 ## Citation
 
 If you find the **Bokeh Extension** useful, please cite this repository:
