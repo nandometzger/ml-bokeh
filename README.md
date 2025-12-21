@@ -1,4 +1,4 @@
-# Sharp Monocular View Synthesis (Bokeh Extension)
+# ML-Bokeh: Monocular View Synthesis with Cinematic Depth-of-Field
 
 <!-- [![Project Page](https://img.shields.io/badge/Project-Page-green)](https://apple.github.io/ml-sharp/)
 [![arXiv](https://img.shields.io/badge/arXiv-2512.10685-b31b1b.svg)](https://arxiv.org/abs/2512.10685) -->
