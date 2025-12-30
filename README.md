@@ -1,4 +1,4 @@
-# ML-Bokeh: Monocular View Synthesis with Cinematic Depth-of-Field
+# ML-Bokeh: Cinematic Depth-of-Field via Monocular View Synthesis
 
 <!-- [![Project Page](https://img.shields.io/badge/Project-Page-green)](https://apple.github.io/ml-sharp/)
 [![arXiv](https://img.shields.io/badge/arXiv-2512.10685-b31b1b.svg)](https://arxiv.org/abs/2512.10685) -->
@@ -104,7 +104,7 @@ If you find the **Bokeh Extension** useful, please cite this repository:
 
 ```bibtex
 @misc{SharpBokeh2025,
-  title  = {ML-Bokeh: Monocular View Synthesis with Cinematic Depth-of-Field},
+  title  = {ML-Bokeh: Cinematic Depth-of-Field via Monocular View Synthesis},
   author = {Metzger, Nando},
   year   = {2025},
   url    = {https://github.com/metzgern/ml-sharp},
