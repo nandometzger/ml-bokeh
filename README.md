@@ -1,20 +1,17 @@
 # Sharp Monocular View Synthesis (Bokeh Extension)
 
-<!-- [![Project Page](https://img.shields.io/badge/Project-Page-green)](https://apple.github.io/ml-sharp/)
-[![arXiv](https://img.shields.io/badge/arXiv-2512.10685-b31b1b.svg)](https://arxiv.org/abs/2512.10685) -->
 
 > **Note:** This repository is an unofficial fork of the original [SHARP](https://github.com/apple/ml-sharp) codebase. It is maintained by **[Nando Metzger](https://nandometzger.github.io)** and extends the original work with **Bokeh Simulation** features.
 
-<!-- This software project accompanies the research paper: _Sharp Monocular View Synthesis in Less Than a Second_ -->
-<!-- by _Lars Mescheder, et al._. -->
 
-<!-- ![](data/teaser.jpg) -->
 ![](data/bokeh_teaser.gif)
 
-_Figure: Real-time focus racking simulation (Left: Input Image, Right: Generated Bokeh Video)_
+_Figure 1: Real-time focus racking simulation (Left: Input Image, Right: Generated Bokeh Video)_
 
+![](data/autofocus_teaser.gif)
 
-<!-- We present SHARP, an approach to photorealistic view synthesis from a single image. Given a single photograph, SHARP regresses the parameters of a 3D Gaussian representation of the depicted scene. -->
+_Figure 2: Smart autofocus bokeh simulation. Using GroundingDINO detection and Sharp's depth maps we find the most aesthetically pleasing focus depth and generate a bokeh video. We implement the following focus priority order: Eyes > Faces > Persons > Animals > Insects > Vehicles > Objects._
+
 
 ## Bokeh Simulation Extension
 
