@@ -156,6 +156,20 @@ def render_focus_rack_video(
             gaussians, renderer, intrinsics, metadata, aperture_size, num_samples, focus_depth
         )
         frames.append(frame_uint8)
+        if device.type == "mps":
+            # Every frame focuses at a different depth, so the principal point
+            # moves and the rasteriser's working buffers come out a different
+            # size each time. The MPS caching allocator holds on to all of
+            # them: measured at 2160px, this drops its pool from 11.02 GiB to
+            # 2.02 GiB and carries the run from frame 8 to frame 15 of 24.
+            #
+            # It is a mitigation and not a fix. That run still ended in "MPS
+            # backend out of memory", with 28 GiB attributed outside the pool
+            # that this cannot reach and that I could not account for; the
+            # rasteriser itself does not grow, holding 0.07 GiB across twelve
+            # repeated renders at the same size. A rack at the prediction's
+            # native 2160px may not finish on a 30 GiB budget.
+            torch.mps.empty_cache()
 
     # Ping pong loop (pad with reverse)
     frames += frames[::-1]
