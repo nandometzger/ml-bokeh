@@ -202,54 +202,58 @@ def _accumulate_frame(
     
     accumulation_buffer = torch.zeros((3, height, width), device=device, dtype=torch.float32)
 
-    for eye_pos in eye_positions:
-        # eye_pos is (x, y, 0) in camera frame
-        offset = eye_pos.to(device)
+    # Only .color is read below, and a backend that pays extra for depth
+    # can skip it here. That is every sample of every frame, so it is not
+    # a micro-optimisation: on Metal it halves the work.
+    with renderer.color_only():
+        for eye_pos in eye_positions:
+            # eye_pos is (x, y, 0) in camera frame
+            offset = eye_pos.to(device)
         
-        # 1. Modify Extrinsics: Translate by offset
-        # World-to-Camera (Extrinsics) T_new = T_translate @ T_base
-        # Since T_base is identity here (canonical view is usually at identity), T_new is just translation.
-        # But wait, input gaussians are already transformed to canonical view??
-        # The render_single_bokeh function sets extrinsics_canonical = Identity.
-        # So we just set the translation column.
-        # Note: Extrinsics matrix usually maps World -> Camera.
-        # If Camera moves by 'offset' in World frame, the point P_w becomes P_c = R(P_w - C_new).
-        # C_new = C_old + offset.
-        # P_c = P_w - offset (assuming R=I).
-        # So we subtract offset from the translation part.
+            # 1. Modify Extrinsics: Translate by offset
+            # World-to-Camera (Extrinsics) T_new = T_translate @ T_base
+            # Since T_base is identity here (canonical view is usually at identity), T_new is just translation.
+            # But wait, input gaussians are already transformed to canonical view??
+            # The render_single_bokeh function sets extrinsics_canonical = Identity.
+            # So we just set the translation column.
+            # Note: Extrinsics matrix usually maps World -> Camera.
+            # If Camera moves by 'offset' in World frame, the point P_w becomes P_c = R(P_w - C_new).
+            # C_new = C_old + offset.
+            # P_c = P_w - offset (assuming R=I).
+            # So we subtract offset from the translation part.
         
-        current_extrinsics = base_extrinsics.clone()
-        current_extrinsics[:3, 3] -= offset
+            current_extrinsics = base_extrinsics.clone()
+            current_extrinsics[:3, 3] -= offset
         
-        # 2. Modify Intrinsics: Shift principal point
-        current_intrinsics = base_intrinsics.clone()
+            # 2. Modify Intrinsics: Shift principal point
+            current_intrinsics = base_intrinsics.clone()
         
-        # Shift amount = f * offset / focus_depth
-        # Note: offset is (x, y, 0).
-        # Careful with signs. 
-        # P_c_new = P_original_cam - offset.
-        # x_new = x_old - offset_x
-        # u_new = f * (x_old - offset_x) / z + cx_new
-        # We want u_new = u_old = f * x_old / z + cx
-        # f * x_old / z - f * offset_x / z + cx_new = f * x_old / z + cx
-        # cx_new = cx + f * offset_x / z
+            # Shift amount = f * offset / focus_depth
+            # Note: offset is (x, y, 0).
+            # Careful with signs. 
+            # P_c_new = P_original_cam - offset.
+            # x_new = x_old - offset_x
+            # u_new = f * (x_old - offset_x) / z + cx_new
+            # We want u_new = u_old = f * x_old / z + cx
+            # f * x_old / z - f * offset_x / z + cx_new = f * x_old / z + cx
+            # cx_new = cx + f * offset_x / z
         
-        shift_x = fx * offset[0] / focus_depth
-        shift_y = fy * offset[1] / focus_depth
+            shift_x = fx * offset[0] / focus_depth
+            shift_y = fy * offset[1] / focus_depth
         
-        current_intrinsics[0, 2] += shift_x
-        current_intrinsics[1, 2] += shift_y
+            current_intrinsics[0, 2] += shift_x
+            current_intrinsics[1, 2] += shift_y
         
-        with torch.no_grad():
-            rendering_output = renderer(
-                gaussians,
-                extrinsics=current_extrinsics.unsqueeze(0),
-                intrinsics=current_intrinsics.unsqueeze(0),
-                image_width=width,
-                image_height=height,
-            )
-            # Accumulate in Linear RGB space
-            accumulation_buffer += rendering_output.color[0]
+            with torch.no_grad():
+                rendering_output = renderer(
+                    gaussians,
+                    extrinsics=current_extrinsics.unsqueeze(0),
+                    intrinsics=current_intrinsics.unsqueeze(0),
+                    image_width=width,
+                    image_height=height,
+                )
+                # Accumulate in Linear RGB space
+                accumulation_buffer += rendering_output.color[0]
 
     averaged_image = accumulation_buffer / num_samples
 

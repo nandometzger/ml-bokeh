@@ -19,6 +19,9 @@ Copyright (C) 2025 Apple Inc. All Rights Reserved.
 
 from __future__ import annotations
 
+import contextlib
+from typing import Iterator
+
 import torch
 
 from sharp.utils.gaussians import Gaussians3D
@@ -32,6 +35,24 @@ class MetalGaussRenderer(GSplatRenderer):
     space handling and the output contract stay in one place; only the call to
     gsplat is replaced.
     """
+
+    _color_only = False
+
+    @contextlib.contextmanager
+    def color_only(self) -> Iterator[None]:
+        """Skip the depth pass, which here costs a whole second rasterisation.
+
+        gsplat returns colour and depth from one pass, so upstream this scope
+        is free and does nothing. metal-gauss returns no depth buffer, so depth
+        has to be composited separately: inside this scope a synthetic-aperture
+        loop of 128 samples was paying for 256 full renders to build 128 depth
+        maps that nothing read. `depth` is zero inside the scope.
+        """
+        previous, self._color_only = self._color_only, True
+        try:
+            yield
+        finally:
+            self._color_only = previous
 
     def forward(
         self,
@@ -74,17 +95,20 @@ class MetalGaussRenderer(GSplatRenderer):
 
             rendered, alpha = _render(colors)
 
-            # Depth the same way gsplat's "RGB+D" produces it: composite the
-            # per-splat camera-space z exactly like a colour, then normalise by
-            # alpha. metal-gauss returns compositing statistics but no depth
-            # buffer, so it costs a second pass.
-            z = (means @ viewmat[:3, :3].T.to(means.device)
-                 + viewmat[:3, 3].to(means.device))[:, 2:3]
-            depth_unnormalized, _ = _render(z.expand(-1, 3))
-
             rendered_color = rendered.permute(2, 0, 1)[None]
             rendered_alpha = alpha.reshape(1, 1, image_height, image_width)
-            rendered_depth = depth_unnormalized.permute(2, 0, 1)[None][:, :1]
+
+            if self._color_only:
+                rendered_depth = torch.zeros_like(rendered_alpha)
+            else:
+                # Depth the same way gsplat's "RGB+D" produces it: composite the
+                # per-splat camera-space z exactly like a colour, then normalise
+                # by alpha. metal-gauss returns compositing statistics but no
+                # depth buffer, so it costs a second pass.
+                z = (means @ viewmat[:3, :3].T.to(means.device)
+                     + viewmat[:3, 3].to(means.device))[:, 2:3]
+                depth_unnormalized, _ = _render(z.expand(-1, 3))
+                rendered_depth = depth_unnormalized.permute(2, 0, 1)[None][:, :1]
 
             rendered_color = self.compose_with_background(
                 rendered_color, rendered_alpha, self.background_color
