@@ -57,6 +57,15 @@ LOGGER = logging.getLogger(__name__)
 )
 @click.option("--debug", is_flag=True, default=False,
               help="Save the autofocus detection visualisation beside the render.")
+@click.option(
+    "--resolution",
+    type=int,
+    default=None,
+    help="Render at this many pixels on the long side instead of the "
+         "prediction's own resolution. A rack at native resolution can "
+         "exhaust GPU memory, and a downscaled render supersamples away the "
+         "aperture sampling.",
+)
 @click.option("--video", "make_video", is_flag=True, help="Render a video with focus racking.")
 @click.option(
     "--num-frames", 
@@ -73,6 +82,7 @@ def bokeh_cli(
     verbose: bool,
     autofocus: bool,
     debug: bool,
+    resolution: int | None,
     make_video: bool,
     num_frames: int,
 ):
@@ -108,7 +118,20 @@ def bokeh_cli(
     for scene_path in scene_paths:
         LOGGER.info("Rendering bokeh for %s", scene_path)
         gaussians, metadata = load_ply(scene_path)
-        
+
+        if resolution:
+            # Scale the focal length with the frame, or the render is the same
+            # scene through a different lens. Done here so both paths get it
+            # and neither renderer has to know.
+            (w, h) = metadata.resolution_px
+            scale = resolution / max(w, h)
+            metadata = metadata._replace(
+                resolution_px=(round(w * scale), round(h * scale)),
+                focal_length_px=metadata.focal_length_px * scale,
+            )
+            LOGGER.info("Rendering at %dx%d, focal %.1fpx",
+                        *metadata.resolution_px, metadata.focal_length_px)
+
         if make_video:
             filename = (output_path / scene_path.stem).with_suffix(".mp4")
             bokeh_renderer.render_focus_rack_video(
