@@ -6,8 +6,9 @@ Copyright (C) 2025 Apple Inc. All Rights Reserved.
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
-from typing import NamedTuple
+from typing import Iterator, NamedTuple
 
 import gsplat
 import torch
@@ -68,6 +69,16 @@ class GSplatRenderer(nn.Module):
         self.color_space = color_space
         self.background_color = background_color
         self.low_pass_filter_eps = low_pass_filter_eps
+
+    @contextlib.contextmanager
+    def color_only(self) -> Iterator[None]:
+        """Scope in which the caller reads only `color` from the outputs.
+
+        gsplat rasterises colour and depth in the same pass, so this is a
+        no-op here. A backend that pays extra for depth may skip it inside the
+        scope and leave `depth` and `alpha` unspecified.
+        """
+        yield
 
     def forward(
         self,

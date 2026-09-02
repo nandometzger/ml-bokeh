@@ -14,7 +14,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from sharp.utils import camera, gsplat, io
+from sharp.utils import camera, gsplat, io, metal_renderer
 from sharp.utils.gaussians import Gaussians3D, SceneMetaData
 
 LOGGER = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ def render_single_bokeh(
     """
     (width, height) = metadata.resolution_px
     f_px = metadata.focal_length_px
-    device = torch.device("cuda")
+    device = metal_renderer.default_device()
     gaussians = gaussians.to(device)
 
     # 1. Setup Canonical Camera
@@ -57,7 +57,7 @@ def render_single_bokeh(
     )
 
     # 2. Determine Focus Point (from center pixel depth)
-    renderer = gsplat.GSplatRenderer(color_space="linearRGB")
+    renderer = metal_renderer.default_renderer(color_space="linearRGB")
     extrinsics_canonical = torch.eye(4, device=device).unsqueeze(0)
     intrinsics_canonical = intrinsics.unsqueeze(0)
 
@@ -116,7 +116,7 @@ def render_focus_rack_video(
     """
     (width, height) = metadata.resolution_px
     f_px = metadata.focal_length_px
-    device = torch.device("cuda")
+    device = metal_renderer.default_device()
     gaussians = gaussians.to(device)
 
     intrinsics = torch.tensor(
@@ -129,7 +129,7 @@ def render_focus_rack_video(
         device=device,
         dtype=torch.float32,
     )
-    renderer = gsplat.GSplatRenderer(color_space="linearRGB")
+    renderer = metal_renderer.default_renderer(color_space="linearRGB")
 
     # Determine depth range using a temporary camera model
     temp_cam = camera.PinholeCameraModel(
@@ -156,6 +156,20 @@ def render_focus_rack_video(
             gaussians, renderer, intrinsics, metadata, aperture_size, num_samples, focus_depth
         )
         frames.append(frame_uint8)
+        if device.type == "mps":
+            # Every frame focuses at a different depth, so the principal point
+            # moves and the rasteriser's working buffers come out a different
+            # size each time. The MPS caching allocator holds on to all of
+            # them: measured at 2160px, this drops its pool from 11.02 GiB to
+            # 2.02 GiB and carries the run from frame 8 to frame 15 of 24.
+            #
+            # It is a mitigation and not a fix. That run still ended in "MPS
+            # backend out of memory", with 28 GiB attributed outside the pool
+            # that this cannot reach and that I could not account for; the
+            # rasteriser itself does not grow, holding 0.07 GiB across twelve
+            # repeated renders at the same size. A rack at the prediction's
+            # native 2160px may not finish on a 30 GiB budget.
+            torch.mps.empty_cache()
 
     # Ping pong loop (pad with reverse)
     frames += frames[::-1]
@@ -202,54 +216,58 @@ def _accumulate_frame(
     
     accumulation_buffer = torch.zeros((3, height, width), device=device, dtype=torch.float32)
 
-    for eye_pos in eye_positions:
-        # eye_pos is (x, y, 0) in camera frame
-        offset = eye_pos.to(device)
+    # Only .color is read below, and a backend that pays extra for depth
+    # can skip it here. That is every sample of every frame, so it is not
+    # a micro-optimisation: on Metal it halves the work.
+    with renderer.color_only():
+        for eye_pos in eye_positions:
+            # eye_pos is (x, y, 0) in camera frame
+            offset = eye_pos.to(device)
         
-        # 1. Modify Extrinsics: Translate by offset
-        # World-to-Camera (Extrinsics) T_new = T_translate @ T_base
-        # Since T_base is identity here (canonical view is usually at identity), T_new is just translation.
-        # But wait, input gaussians are already transformed to canonical view??
-        # The render_single_bokeh function sets extrinsics_canonical = Identity.
-        # So we just set the translation column.
-        # Note: Extrinsics matrix usually maps World -> Camera.
-        # If Camera moves by 'offset' in World frame, the point P_w becomes P_c = R(P_w - C_new).
-        # C_new = C_old + offset.
-        # P_c = P_w - offset (assuming R=I).
-        # So we subtract offset from the translation part.
+            # 1. Modify Extrinsics: Translate by offset
+            # World-to-Camera (Extrinsics) T_new = T_translate @ T_base
+            # Since T_base is identity here (canonical view is usually at identity), T_new is just translation.
+            # But wait, input gaussians are already transformed to canonical view??
+            # The render_single_bokeh function sets extrinsics_canonical = Identity.
+            # So we just set the translation column.
+            # Note: Extrinsics matrix usually maps World -> Camera.
+            # If Camera moves by 'offset' in World frame, the point P_w becomes P_c = R(P_w - C_new).
+            # C_new = C_old + offset.
+            # P_c = P_w - offset (assuming R=I).
+            # So we subtract offset from the translation part.
         
-        current_extrinsics = base_extrinsics.clone()
-        current_extrinsics[:3, 3] -= offset
+            current_extrinsics = base_extrinsics.clone()
+            current_extrinsics[:3, 3] -= offset
         
-        # 2. Modify Intrinsics: Shift principal point
-        current_intrinsics = base_intrinsics.clone()
+            # 2. Modify Intrinsics: Shift principal point
+            current_intrinsics = base_intrinsics.clone()
         
-        # Shift amount = f * offset / focus_depth
-        # Note: offset is (x, y, 0).
-        # Careful with signs. 
-        # P_c_new = P_original_cam - offset.
-        # x_new = x_old - offset_x
-        # u_new = f * (x_old - offset_x) / z + cx_new
-        # We want u_new = u_old = f * x_old / z + cx
-        # f * x_old / z - f * offset_x / z + cx_new = f * x_old / z + cx
-        # cx_new = cx + f * offset_x / z
+            # Shift amount = f * offset / focus_depth
+            # Note: offset is (x, y, 0).
+            # Careful with signs. 
+            # P_c_new = P_original_cam - offset.
+            # x_new = x_old - offset_x
+            # u_new = f * (x_old - offset_x) / z + cx_new
+            # We want u_new = u_old = f * x_old / z + cx
+            # f * x_old / z - f * offset_x / z + cx_new = f * x_old / z + cx
+            # cx_new = cx + f * offset_x / z
         
-        shift_x = fx * offset[0] / focus_depth
-        shift_y = fy * offset[1] / focus_depth
+            shift_x = fx * offset[0] / focus_depth
+            shift_y = fy * offset[1] / focus_depth
         
-        current_intrinsics[0, 2] += shift_x
-        current_intrinsics[1, 2] += shift_y
+            current_intrinsics[0, 2] += shift_x
+            current_intrinsics[1, 2] += shift_y
         
-        with torch.no_grad():
-            rendering_output = renderer(
-                gaussians,
-                extrinsics=current_extrinsics.unsqueeze(0),
-                intrinsics=current_intrinsics.unsqueeze(0),
-                image_width=width,
-                image_height=height,
-            )
-            # Accumulate in Linear RGB space
-            accumulation_buffer += rendering_output.color[0]
+            with torch.no_grad():
+                rendering_output = renderer(
+                    gaussians,
+                    extrinsics=current_extrinsics.unsqueeze(0),
+                    intrinsics=current_intrinsics.unsqueeze(0),
+                    image_width=width,
+                    image_height=height,
+                )
+                # Accumulate in Linear RGB space
+                accumulation_buffer += rendering_output.color[0]
 
     averaged_image = accumulation_buffer / num_samples
 

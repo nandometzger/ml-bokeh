@@ -48,6 +48,15 @@ LOGGER = logging.getLogger(__name__)
     default=128,
     help="Number of samples for the synthetic aperture.",
 )
+@click.option(
+    "--autofocus",
+    is_flag=True,
+    default=False,
+    help="Choose the focus depth automatically. Priority: eyes, faces, persons, "
+         "animals, insects, vehicles, objects. Single images only.",
+)
+@click.option("--debug", is_flag=True, default=False,
+              help="Save the autofocus detection visualisation beside the render.")
 @click.option("--video", "make_video", is_flag=True, help="Render a video with focus racking.")
 @click.option(
     "--num-frames", 
@@ -62,6 +71,8 @@ def bokeh_cli(
     aperture_size: float,
     num_samples: int,
     verbose: bool,
+    autofocus: bool,
+    debug: bool,
     make_video: bool,
     num_frames: int,
 ):
@@ -74,9 +85,15 @@ def bokeh_cli(
 
     logging_utils.configure(logging.DEBUG if verbose else logging.INFO)
 
-    if not torch.cuda.is_available():
-        LOGGER.error("Rendering requires CUDA.")
+    if not (torch.cuda.is_available() or torch.backends.mps.is_available()):
+        LOGGER.error("Rendering requires CUDA (gsplat) or Apple Silicon (metal-gauss).")
         exit(1)
+
+    if autofocus and make_video:
+        # A rack sweeps the whole depth range, so there is no single focus
+        # depth for autofocus to choose. Say so rather than ignore the flag.
+        LOGGER.warning("--autofocus does not apply to --video; a focus rack "
+                       "already sweeps the full range. Ignoring it.")
 
     output_path.mkdir(exist_ok=True, parents=True)
 
@@ -110,6 +127,8 @@ def bokeh_cli(
                 output_path=filename,
                 aperture_size=aperture_size,
                 num_samples=num_samples,
+                autofocus=autofocus,
+                debug=debug,
             )
 
 
