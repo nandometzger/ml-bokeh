@@ -16,6 +16,12 @@ dependencies = [
   "torchvision",
 ]
 
+[project.optional-dependencies]
+# gsplat's rasteriser is CUDA-only, so on Apple Silicon rendering needs a
+# different one. metal-gauss is MIT and is called, not vendored. It is not on
+# PyPI, hence the URL. The import is lazy, so a CUDA install never touches it.
+metal = ["metal-gauss @ git+https://github.com/nandometzger/metal-gauss.git"]
+
 [project.scripts]
 sharp = "sharp.cli:main_cli"
 

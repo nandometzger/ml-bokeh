@@ -87,6 +87,19 @@ Automatically detect subjects (Eyes > Persons > Objects) and focus on the one cl
 sharp bokeh -i /path/to/input/gaussians -o /path/to/output/bokeh --autofocus --debug
 ```
 
+### Apple Silicon
+
+gsplat's rasteriser is CUDA-only, so bokeh rendering used to refuse to start on
+a Mac. Installing the `metal` extra swaps in
+[metal-gauss](https://github.com/nandometzger/metal-gauss), a Metal-native
+rasteriser, behind the same interface:
+
+```
+pip install -e ".[metal]"
+sharp predict -i photo.jpg -o gaussians --device mps
+sharp bokeh -i gaussians -o bokeh --autofocus
+```
+
 **Parameters:**
 *   `--aperture-size`: Diameter of the virtual aperture (default: 0.01). Larger = more blur.
 *   `--num-samples`: Number of views to accumulate per frame (default: 128). Higher = smoother bokeh but slower.

@@ -14,7 +14,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from sharp.utils import camera, gsplat, io
+from sharp.utils import camera, gsplat, io, metal_renderer
 from sharp.utils.gaussians import Gaussians3D, SceneMetaData
 
 LOGGER = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ def render_single_bokeh(
     """
     (width, height) = metadata.resolution_px
     f_px = metadata.focal_length_px
-    device = torch.device("cuda")
+    device = metal_renderer.default_device()
     gaussians = gaussians.to(device)
 
     # 1. Setup Canonical Camera
@@ -57,7 +57,7 @@ def render_single_bokeh(
     )
 
     # 2. Determine Focus Point (from center pixel depth)
-    renderer = gsplat.GSplatRenderer(color_space="linearRGB")
+    renderer = metal_renderer.default_renderer(color_space="linearRGB")
     extrinsics_canonical = torch.eye(4, device=device).unsqueeze(0)
     intrinsics_canonical = intrinsics.unsqueeze(0)
 
@@ -116,7 +116,7 @@ def render_focus_rack_video(
     """
     (width, height) = metadata.resolution_px
     f_px = metadata.focal_length_px
-    device = torch.device("cuda")
+    device = metal_renderer.default_device()
     gaussians = gaussians.to(device)
 
     intrinsics = torch.tensor(
@@ -129,7 +129,7 @@ def render_focus_rack_video(
         device=device,
         dtype=torch.float32,
     )
-    renderer = gsplat.GSplatRenderer(color_space="linearRGB")
+    renderer = metal_renderer.default_renderer(color_space="linearRGB")
 
     # Determine depth range using a temporary camera model
     temp_cam = camera.PinholeCameraModel(
